@@ -39,7 +39,8 @@
     try {
       const stored = localStorage.getItem('avanzaOptimizerSettings');
       return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
-    } catch {
+    } catch (e) {
+      console.warn('[AvanzaOptimizer] Failed to load settings, using defaults', e.message);
       return DEFAULT_SETTINGS;
     }
   }
@@ -53,9 +54,12 @@
     console.log(`%c[AvanzaOptimizer] ${msg}`, 'color: #00d1b2; font-weight: bold;', data || '');
   };
 
+  function isPrivateBankingClass(classType) {
+    return classType && classType.startsWith('PRIVATE_BANKING');
+  }
+
   function getBreakpoints(currentClass) {
-    const isPB = currentClass && currentClass.startsWith('PRIVATE_BANKING');
-    return isPB ? PB_BREAKPOINTS : STANDARD_BREAKPOINTS;
+    return isPrivateBankingClass(currentClass) ? PB_BREAKPOINTS : STANDARD_BREAKPOINTS;
   }
 
   function solveOptimal(amount, currentClass) {
@@ -67,8 +71,7 @@
   }
 
   function calculateFee(amount, classType) {
-    const isPB = classType && classType.startsWith('PRIVATE_BANKING');
-    const breakpoints = isPB ? PB_BREAKPOINTS : STANDARD_BREAKPOINTS;
+    const breakpoints = isPrivateBankingClass(classType) ? PB_BREAKPOINTS : STANDARD_BREAKPOINTS;
     const bp = breakpoints.find(b => b.class === classType);
     if (!bp) return 0;
     const percentFee = amount * bp.percent;
@@ -95,7 +98,9 @@
             ? Object.fromEntries(config.headers.entries())
             : config.headers;
           capturedHeaders = { ...capturedHeaders, ...newHeaders };
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[AvanzaOptimizer] Failed to capture fetch headers', e.message);
+        }
       }
 
       const response = await originalFetch.apply(this, args);
@@ -108,7 +113,9 @@
           payload = JSON.parse(config.body);
         }
         handlePreliminaryFeeResponse(payload, responseData);
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[AvanzaOptimizer] Failed to handle preliminary fee response', e.message);
+      }
 
       return response;
     }
@@ -122,7 +129,9 @@
         if (data.orderRequestStatus === 'SUCCESS') {
           handleOrderSuccess();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[AvanzaOptimizer] Failed to handle order success response', e.message);
+      }
 
       return response;
     }
@@ -162,7 +171,9 @@
           const responseData = JSON.parse(this.responseText);
           let payload = postData ? JSON.parse(postData) : null;
           handlePreliminaryFeeResponse(payload, responseData);
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[AvanzaOptimizer] Failed to handle XHR preliminary fee response', e.message);
+        }
       });
     }
 
@@ -173,7 +184,9 @@
           if (data.orderRequestStatus === 'SUCCESS') {
             handleOrderSuccess();
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[AvanzaOptimizer] Failed to handle XHR order success response', e.message);
+        }
       });
     }
 
