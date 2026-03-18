@@ -7,6 +7,8 @@
     defaultClass: 'MINI',
     mode: 'automatic',
     resetAfterOrder: true,
+    privacyMode: false,
+    hideLogos: false,
   };
 
   async function getSettings() {
@@ -40,7 +42,7 @@
         });
       }
     } catch (e) {
-      console.log('Could not inject settings:', e);
+      console.warn('[AvanzaUtilityTools] Could not inject settings:', e);
     }
   }
 
@@ -56,6 +58,12 @@
 
     // Reset after order toggle
     document.getElementById('resetAfterOrder').checked = settings.resetAfterOrder;
+
+    // Privacy mode toggle
+    document.getElementById('privacyMode').checked = !!settings.privacyMode;
+
+    // Hide logos toggle
+    document.getElementById('hideLogos').checked = !!settings.hideLogos;
 
     // Class radio buttons
     const radios = document.querySelectorAll('input[name="defaultClass"]');
@@ -121,6 +129,22 @@
         updateUI(newSettings);
         showStatus();
       });
+    });
+
+    // Privacy mode toggle
+    document.getElementById('privacyMode').addEventListener('change', async (e) => {
+      const currentSettings = await getSettings();
+      const newSettings = { ...currentSettings, privacyMode: e.target.checked };
+      await saveSettings(newSettings);
+      showStatus();
+    });
+
+    // Hide logos toggle
+    document.getElementById('hideLogos').addEventListener('change', async (e) => {
+      const currentSettings = await getSettings();
+      const newSettings = { ...currentSettings, hideLogos: e.target.checked };
+      await saveSettings(newSettings);
+      showStatus();
     });
   }
 

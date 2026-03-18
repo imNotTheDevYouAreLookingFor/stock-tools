@@ -13,7 +13,7 @@
     }
     h1 {
       font-size: 15px;
-      color: #00d1b2;
+      color: #068e6a;
       margin-bottom: 16px;
       font-weight: 600;
     }
@@ -78,7 +78,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
     .toggle-switch input:checked + .toggle-slider {
-      background-color: #00d1b2;
+      background-color: #068e6a;
     }
     .toggle-switch input:checked + .toggle-slider:before {
       transform: translateX(20px);
@@ -90,9 +90,18 @@
       margin: 12px 0;
     }
 
+    .shortcut {
+      font-size: 10px;
+      color: #aaa;
+      background: #f0f0f0;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 4px;
+      font-family: monospace;
+    }
     .status {
       font-size: 12px;
-      color: #00d1b2;
+      color: #068e6a;
       text-align: center;
       margin-top: 12px;
       opacity: 0;
@@ -119,18 +128,18 @@
       font-weight: 400;
     }
     .tier-btn.active {
-      background: #00d1b2;
-      border-color: #00d1b2;
+      background: #068e6a;
+      border-color: #068e6a;
       color: #fff;
       font-weight: 600;
     }
     .tier-btn:hover:not(.active) {
-      border-color: #00d1b2;
+      border-color: #068e6a;
     }
   </style>
 </head>
 <body>
-  <h1>Courtage Optimizer</h1>
+  <h1>Avanza Utility Tools</h1>
 
   <div class="section">
     <div class="toggle-row">
@@ -215,6 +224,25 @@
       <label>Återställ efter order</label>
       <label class="toggle-switch">
         <input type="checkbox" id="resetAfterOrder">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="toggle-row">
+      <label>Privacy mode <span class="shortcut">Alt+P</span></label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="privacyMode">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <label>Dölj loggor <span class="shortcut">Alt+L</span></label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="hideLogos">
         <span class="toggle-slider"></span>
       </label>
     </div>
