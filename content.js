@@ -1,38 +1,43 @@
 (function () {
   'use strict';
 
-  console.log('%c[AvanzaOptimizer] Ready', 'color: #00d1b2; font-weight: bold;');
+  // === CONSTANTS ===
+  const DEBOUNCE_MS = 300;
+  const RECALC_DEBOUNCE_MS = 200;
+  const MIN_API_INTERVAL = 1000;
+  const FETCH_TIMEOUT_MS = 8000;
+  const POST_ORDER_RESET_DELAY_MS = 500;
+  const NOTIFICATION_TIMEOUT_MS = 3000;
+
+  const STANDARD_BREAKPOINTS = [
+    { limit: 15600,   class: 'MINI',                    label: 'Mini',         percent: 0.0025,  min: 1  },
+    { limit: 46000,   class: 'SMALL',                   label: 'Small',        percent: 0.0015,  min: 39 },
+    { limit: 143500,  class: 'MEDIUM',                  label: 'Medium',       percent: 0.00069, min: 69 },
+    { limit: Infinity, class: 'FASTPRIS',               label: 'Fast Pris',    percent: 0,       min: 99 },
+  ];
+
+  const PB_BREAKPOINTS = [
+    { limit: 39333,   class: 'PRIVATE_BANKING_MINI',    label: 'PB Mini',      percent: 0.0025,  min: 1  },
+    { limit: 180000,  class: 'PRIVATE_BANKING',         label: 'PB',           percent: 0.00079, min: 59 },
+    { limit: Infinity, class: 'PRIVATE_BANKING_FASTPRIS', label: 'PB Fast Pris', percent: 0,    min: 99 },
+  ];
 
   // === STATE ===
   let isSwitching = false;
+  let pendingSwitchClass = null;
   let capturedHeaders = {};
   let pendingCheck = null;
   let lastApiCall = 0;
   let currentOrderInfo = null;
   let lastKnownClass = null;
 
-  // === CONSTANTS ===
-  const DEBOUNCE_MS = 300;
-  const MIN_API_INTERVAL = 1000;
-
-  const STANDARD_BREAKPOINTS = [
-    { limit: 15600, class: 'MINI', label: 'Mini', percent: 0.0025, min: 1 },
-    { limit: 46000, class: 'SMALL', label: 'Small', percent: 0.0015, min: 39 },
-    { limit: 143500, class: 'MEDIUM', label: 'Medium', percent: 0.00069, min: 69 },
-    { limit: Infinity, class: 'FASTPRIS', label: 'Fast Pris', percent: 0, min: 99 },
-  ];
-
-  const PB_BREAKPOINTS = [
-    { limit: 39333, class: 'PRIVATE_BANKING_MINI', label: 'PB Mini', percent: 0.0025, min: 1 },
-    { limit: 180000, class: 'PRIVATE_BANKING', label: 'PB', percent: 0.00079, min: 59 },
-    { limit: Infinity, class: 'PRIVATE_BANKING_FASTPRIS', label: 'PB Fast Pris', percent: 0, min: 99 },
-  ];
-
   // === SETTINGS ===
   const DEFAULT_SETTINGS = {
     defaultClass: 'MINI',
     mode: 'automatic',
     resetAfterOrder: true,
+    privacyMode: false,
+    hideLogos: false,
   };
 
   function getSettings() {
@@ -51,7 +56,7 @@
 
   // === HELPERS ===
   const log = (msg, data) => {
-    console.log(`%c[AvanzaOptimizer] ${msg}`, 'color: #00d1b2; font-weight: bold;', data || '');
+    console.log(`%c[AvanzaOptimizer] ${msg}`, 'color: #068e6a; font-weight: bold;', data || '');
   };
 
   function isPrivateBankingClass(classType) {
@@ -74,9 +79,7 @@
     const breakpoints = isPrivateBankingClass(classType) ? PB_BREAKPOINTS : STANDARD_BREAKPOINTS;
     const bp = breakpoints.find(b => b.class === classType);
     if (!bp) return 0;
-    const percentFee = amount * bp.percent;
-    const fee = Math.max(percentFee, bp.min);
-    return Math.round(fee * 100) / 100;
+    return Math.max(Math.round(amount * bp.percent * 100) / 100, bp.min);
   }
 
   function getClassLabel(classType) {
@@ -85,11 +88,18 @@
     return bp ? bp.label : classType;
   }
 
+  function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    return originalFetch(url, { ...options, signal: controller.signal })
+      .finally(() => clearTimeout(timer));
+  }
+
   // === FETCH INTERCEPTION ===
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
-    let [resource, config] = args;
-    let url = resource instanceof Request ? resource.url : resource;
+    const [resource, config] = args;
+    const url = resource instanceof Request ? resource.url : resource;
 
     if (typeof url === 'string' && url.includes('preliminary-fee')) {
       if (config && config.headers) {
@@ -108,10 +118,7 @@
 
       try {
         const responseData = await clone.json();
-        let payload = null;
-        if (config && config.body) {
-          payload = JSON.parse(config.body);
-        }
+        const payload = config && config.body ? JSON.parse(config.body) : null;
         handlePreliminaryFeeResponse(payload, responseData);
       } catch (e) {
         console.warn('[AvanzaOptimizer] Failed to handle preliminary fee response', e.message);
@@ -169,7 +176,7 @@
       this.addEventListener('load', () => {
         try {
           const responseData = JSON.parse(this.responseText);
-          let payload = postData ? JSON.parse(postData) : null;
+          const payload = postData ? JSON.parse(postData) : null;
           handlePreliminaryFeeResponse(payload, responseData);
         } catch (e) {
           console.warn('[AvanzaOptimizer] Failed to handle XHR preliminary fee response', e.message);
@@ -199,12 +206,10 @@
 
     const price = parseFloat(payload.price);
     const volume = parseFloat(payload.volume);
-    if (!price || !volume) return;
-
-    const total = price * volume;
+    if (!price || !volume || isNaN(price) || isNaN(volume)) return;
 
     currentOrderInfo = {
-      total,
+      total: price * volume,
       currency: responseData.orderbookCurrency || 'SEK',
       commission: responseData.commission,
     };
@@ -226,7 +231,6 @@
       return;
     }
 
-    // Throttle API calls
     const now = Date.now();
     if (now - lastApiCall < MIN_API_INTERVAL) {
       if (lastKnownClass) {
@@ -237,10 +241,13 @@
     lastApiCall = now;
 
     try {
-      const res = await originalFetch('/_api/trading/courtageclass/courtageclass/', {
+      const res = await fetchWithTimeout('/_api/trading/courtageclass/courtageclass/', {
         headers: { 'Content-Type': 'application/json', ...capturedHeaders },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.warn(`[AvanzaOptimizer] Get class returned ${res.status}`);
+        return;
+      }
       const data = await res.json();
       const currentClass = data.currentCourtageClass;
       if (!currentClass) return;
@@ -248,7 +255,11 @@
       lastKnownClass = currentClass;
       handleProcessResult(orderInfo, currentClass, settings);
     } catch (e) {
-      console.error('[AvanzaOptimizer] Failed to get current class', e);
+      if (e.name === 'AbortError') {
+        console.warn('[AvanzaOptimizer] Get class timed out');
+      } else {
+        console.error('[AvanzaOptimizer] Failed to get current class', e);
+      }
     }
   }
 
@@ -258,20 +269,24 @@
 
     if (settings.mode === 'automatic' && currentClass !== optimal) {
       log(`Switching ${currentClass} -> ${optimal}...`);
-      performSwitch(optimal).then(() => {
-        updateUI(orderInfo, optimal, false);
-      });
+      performSwitch(optimal)
+        .then(() => updateUI(orderInfo, optimal, false))
+        .catch(e => console.error('[AvanzaOptimizer] Switch failed in handleProcessResult', e));
     } else {
       updateUI(orderInfo, currentClass, false);
     }
   }
 
   async function performSwitch(newClass) {
-    if (isSwitching) return;
+    if (isSwitching) {
+      pendingSwitchClass = newClass;
+      return;
+    }
     isSwitching = true;
+    pendingSwitchClass = null;
 
     try {
-      const res = await originalFetch('/_api/trading/courtageclass/courtageclass/update/', {
+      const res = await fetchWithTimeout('/_api/trading/courtageclass/courtageclass/update/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...capturedHeaders },
         body: JSON.stringify({ newClass }),
@@ -282,7 +297,6 @@
         log(`Success! Switched to ${newClass}`);
         lastKnownClass = newClass;
         showNotification(`Courtage: ${getClassLabel(newClass)}`);
-
         if (currentOrderInfo) {
           updateUI(currentOrderInfo, newClass, currentOrderInfo.currency !== 'SEK');
         }
@@ -290,9 +304,18 @@
         console.error('[AvanzaOptimizer] Switch failed', result);
       }
     } catch (e) {
-      console.error('[AvanzaOptimizer] Switch error', e);
+      if (e.name === 'AbortError') {
+        console.warn('[AvanzaOptimizer] Switch timed out');
+      } else {
+        console.error('[AvanzaOptimizer] Switch error', e);
+      }
     } finally {
       isSwitching = false;
+      if (pendingSwitchClass) {
+        const next = pendingSwitchClass;
+        pendingSwitchClass = null;
+        performSwitch(next);
+      }
     }
   }
 
@@ -303,7 +326,7 @@
     log(`Order SUCCESS - resetting to default: ${settings.defaultClass}`);
     setTimeout(() => {
       performSwitch(settings.defaultClass);
-    }, 500);
+    }, POST_ORDER_RESET_DELAY_MS);
   }
 
   // === UI ===
@@ -314,7 +337,6 @@
 
     const settings = getSettings();
     const breakpoints = currentClass ? getBreakpoints(currentClass) : STANDARD_BREAKPOINTS;
-    const optimal = orderInfo ? solveOptimal(orderInfo.total, currentClass) : null;
 
     const container = document.createElement('div');
     container.id = UI_CONTAINER_ID;
@@ -327,7 +349,6 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
 
-    // Header
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;';
 
@@ -337,13 +358,10 @@
       ? `Utländsk order (${orderInfo.currency}) - välj courtage manuellt`
       : 'Välj courtage';
 
-    const toggle = createModeToggle(settings);
-
     header.appendChild(title);
-    header.appendChild(toggle);
+    header.appendChild(createModeToggle(settings));
     container.appendChild(header);
 
-    // Buttons
     const buttonsRow = document.createElement('div');
     buttonsRow.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap;';
 
@@ -356,8 +374,8 @@
       btn.style.cssText = `
         padding: 8px 16px;
         border-radius: 20px;
-        border: 2px solid ${isCurrent ? '#00d1b2' : '#ccc'};
-        background: ${isCurrent ? '#00d1b2' : '#fff'};
+        border: 2px solid ${isCurrent ? '#068e6a' : '#ccc'};
+        background: ${isCurrent ? '#068e6a' : '#fff'};
         color: ${isCurrent ? '#fff' : '#333'};
         cursor: pointer;
         font-weight: ${isCurrent ? '600' : '400'};
@@ -374,13 +392,13 @@
 
       btn.onmouseenter = () => {
         if (!isCurrent) {
-          btn.style.borderColor = '#00d1b2';
+          btn.style.borderColor = '#068e6a';
           btn.style.background = '#e0f7f4';
         }
       };
       btn.onmouseleave = () => {
-        btn.style.background = isCurrent ? '#00d1b2' : '#fff';
-        btn.style.borderColor = isCurrent ? '#00d1b2' : '#ccc';
+        btn.style.background = isCurrent ? '#068e6a' : '#fff';
+        btn.style.borderColor = isCurrent ? '#068e6a' : '#ccc';
       };
 
       buttonsRow.appendChild(btn);
@@ -414,8 +432,9 @@
     btn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const newMode = settings.mode === 'automatic' ? 'manual' : 'automatic';
-      saveSettings({ ...settings, mode: newMode });
+      const current = getSettings();
+      const newMode = current.mode === 'automatic' ? 'manual' : 'automatic';
+      saveSettings({ ...current, mode: newMode });
       showNotification(`Läge: ${newMode === 'automatic' ? 'Automatiskt' : 'Manuellt'}`);
       if (currentOrderInfo) {
         processOrder(currentOrderInfo);
@@ -435,8 +454,7 @@
   }
 
   function removeUI() {
-    const existing = document.getElementById(UI_CONTAINER_ID);
-    if (existing) existing.remove();
+    document.getElementById(UI_CONTAINER_ID)?.remove();
   }
 
   // === NOTIFICATION ===
@@ -447,10 +465,10 @@
       top: 80px;
       right: 20px;
       padding: 12px 24px;
-      background-color: ${type === 'error' ? '#e74c3c' : '#00d1b2'};
+      background-color: ${type === 'error' ? '#e74c3c' : '#068e6a'};
       color: #fff;
       border-radius: 20px;
-      z-index: 100000;
+      z-index: 9999;
       font-weight: 600;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -458,23 +476,20 @@
     `;
     div.textContent = msg;
     document.body.appendChild(div);
-    setTimeout(() => div.remove(), 3000);
+    setTimeout(() => div.remove(), NOTIFICATION_TIMEOUT_MS);
   }
 
   // === OBSERVERS ===
   function setupObservers() {
-    // Re-inject UI if Angular re-renders
     const mutationObserver = new MutationObserver(() => {
       if (currentOrderInfo && !document.getElementById(UI_CONTAINER_ID)) {
-        const courtageRow = document.querySelector('[data-e2e="totalFees"]');
-        if (courtageRow) {
+        if (document.querySelector('[data-e2e="totalFees"]')) {
           processOrder(currentOrderInfo);
         }
       }
     });
     mutationObserver.observe(document.body, { childList: true, subtree: true });
 
-    // Watch input changes for recalculation
     let recalcTimeout = null;
     document.addEventListener('input', (e) => {
       const input = e.target;
@@ -484,15 +499,19 @@
 
       if (recalcTimeout) clearTimeout(recalcTimeout);
       recalcTimeout = setTimeout(() => {
+        recalcTimeout = null;
         recalcFromInputs();
-      }, 200);
+      }, RECALC_DEBOUNCE_MS);
     }, true);
   }
 
   function recalcFromInputs() {
     if (!currentOrderInfo || !lastKnownClass) return;
 
-    const inputs = document.querySelectorAll('input');
+    const orderForm = document.querySelector('[class*="order"]');
+    if (!orderForm) return;
+
+    const inputs = orderForm.querySelectorAll('input');
     let price = null;
     let volume = null;
 
@@ -511,9 +530,8 @@
       } else if (context.includes('kurs') || context.includes('pris') || context.includes('price')) {
         price = val;
       } else if (context.includes('belopp') || context.includes('amount')) {
-        currentOrderInfo.total = val;
+        currentOrderInfo = { ...currentOrderInfo, total: val };
         updateFromInputChange();
-        return;
       }
     });
 
@@ -521,7 +539,7 @@
       const newTotal = price * volume;
       if (newTotal !== currentOrderInfo.total) {
         log(`Recalc: ${volume} x ${price} = ${newTotal}`);
-        currentOrderInfo.total = newTotal;
+        currentOrderInfo = { ...currentOrderInfo, total: newTotal };
         updateFromInputChange();
       }
     }
@@ -543,16 +561,120 @@
     }
   }
 
-  // === INIT ===
-  if (document.body) {
-    setupObservers();
-  } else {
-    document.addEventListener('DOMContentLoaded', setupObservers);
+  // === PRIVACY MODE ===
+  const PRIVACY_CLASS = 'aza-optimizer-privacy';
+  const PRIVACY_SELECTORS = [
+    'aza-my-holdings-card .value',
+    '.values-container aza-numerical',
+    'aza-positions-table aza-numerical',
+    'aza-total-summary aza-numerical',
+    'aza-category-header aza-numerical',
+    'aza-overview-category-rows aza-numerical',
+    'aza-overview-category-rows .row-info .text',
+  ];
+
+  function injectPrivacyStyles() {
+    if (document.getElementById('aza-optimizer-privacy-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'aza-optimizer-privacy-styles';
+    const rules = PRIVACY_SELECTORS.map(sel => `
+      body.${PRIVACY_CLASS} ${sel} {
+        filter: blur(7px);
+        transition: filter 0.15s;
+        cursor: pointer;
+        user-select: none;
+      }
+      body.${PRIVACY_CLASS} ${sel}:hover {
+        filter: blur(0);
+      }
+    `).join('');
+    style.textContent = rules;
+    (document.head || document.documentElement).appendChild(style);
   }
 
-  // Listen for settings changes from popup
+  function applyPrivacyMode(enabled) {
+    injectPrivacyStyles();
+    document.body.classList.toggle(PRIVACY_CLASS, enabled);
+    log(`Privacy mode: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
+  function initPrivacyMode() {
+    injectPrivacyStyles();
+    if (getSettings().privacyMode) {
+      document.body.classList.add(PRIVACY_CLASS);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key === 'p') {
+        const current = getSettings();
+        const next = !current.privacyMode;
+        saveSettings({ ...current, privacyMode: next });
+        applyPrivacyMode(next);
+        showNotification(`Privacy mode: ${next ? 'PÅ' : 'AV'}`);
+      }
+    });
+  }
+
+  // === HIDE LOGOS ===
+  const HIDE_LOGOS_CLASS = 'aza-optimizer-hide-logos';
+
+  function injectHideLogosStyles() {
+    if (document.getElementById('aza-optimizer-hide-logos-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'aza-optimizer-hide-logos-styles';
+    style.textContent = `
+      body.${HIDE_LOGOS_CLASS} aza-feature-toggled-instrument-icon {
+        display: none !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function applyHideLogos(enabled) {
+    injectHideLogosStyles();
+    document.body.classList.toggle(HIDE_LOGOS_CLASS, enabled);
+    log(`Hide logos: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
+  function initHideLogos() {
+    injectHideLogosStyles();
+    if (getSettings().hideLogos) {
+      document.body.classList.add(HIDE_LOGOS_CLASS);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key === 'l') {
+        const current = getSettings();
+        const next = !current.hideLogos;
+        saveSettings({ ...current, hideLogos: next });
+        applyHideLogos(next);
+        showNotification(`Loggor: ${next ? 'dolda' : 'visas'}`);
+      }
+    });
+  }
+
+  // === INIT ===
+  function init() {
+    setupObservers();
+    initPrivacyMode();
+    initHideLogos();
+    log('Ready');
+  }
+
+  if (document.body) {
+    init();
+  } else {
+    document.addEventListener('DOMContentLoaded', init);
+  }
+
   window.addEventListener('avanzaOptimizerSettingsChanged', (e) => {
     log('Settings updated from popup', e.detail);
+    if (typeof e.detail.privacyMode === 'boolean') {
+      applyPrivacyMode(e.detail.privacyMode);
+    }
+    if (typeof e.detail.hideLogos === 'boolean') {
+      applyHideLogos(e.detail.hideLogos);
+    }
     if (currentOrderInfo) {
       processOrder(currentOrderInfo);
     }

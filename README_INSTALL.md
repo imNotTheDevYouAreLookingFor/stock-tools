@@ -1,4 +1,4 @@
-# Avanza Courtage Optimizer - Installation
+# Avanza Utility Tools - Installation
 
 Hej! Här är guiden för att installera tillägget i Google Chrome.
 
@@ -21,10 +21,43 @@ Eftersom detta tillägg inte ligger på Chrome Web Store måste det installeras 
     - Välj mappen `courtage` som du packade upp i steg 1.
 
 5.  **Klart!**
-    - Tillägget är nu aktivt!
-    - Gå in på Avanza och lägg en order. Tillägget kommer automatiskt byta courtageklass om det lönar sig.
-    - Du kan se att det funkar genom att en grön notis dyker upp i hörnet när den byter.
+    - Tillägget är nu aktivt! Klicka på ikonen i Chrome för att öppna inställningarna.
 
-## Vad gör den?
+---
 
-Tillägget kollar beloppet du skriver in i köprutan och räknar ut om det är billigare med en annan courtageklass (Mini, Small, Medium, Fast Pris). Om det är billigare byter den automatiskt åt dig i bakgrunden.
+## Funktioner
+
+### Courtage Optimizer
+Tillägget kollar beloppet du skriver in i köprutan och räknar ut vilken courtageklass som är billigast (Mini, Small, Medium, Fast Pris – eller PB-klasserna för Private Banking-kunder). Om det lönar sig byter den automatiskt klass åt dig i bakgrunden, och en grön notis visas i hörnet.
+
+- **Automatiskt läge** – byter klass automatiskt vid varje order
+- **Manuellt läge** – visar knappar så du väljer själv
+- **Återställ efter order** – byter tillbaka till din standardklass efter genomförd order
+- **Standard- och Private Banking-tier** – stöd för båda klassuppsättningarna
+
+### Privacy Mode
+Döljer känsliga ekonomiska värden på Avanza – totalt kontovärde, innehav, inköpsvärde, marknadsvärde m.m. Hover-to-peek: håll musen över ett dolt värde för att tillfälligt se det.
+
+- Täcker toppbaren (Totalt värde, Tillgängligt för köp, Utveckling)
+- Täcker innehavskortet på aktiesidor
+- Täcker portföljtabellen och summering
+- **Toggle:** Popup-knappen eller `Alt+P`
+
+### Dölj loggor
+Tar bort bolagsloggor från börsskärmen (vinnare/förlorare, bevakningslistor m.m.) för ett renare gränssnitt.
+
+- **Toggle:** Popup-knappen eller `Alt+L`
+
+---
+
+## Inställningar
+
+Klicka på tilläggets ikon i Chrome för att öppna inställningspanelen:
+
+| Inställning | Beskrivning |
+|---|---|
+| Automatiskt läge | Slår på/av automatisk courtagebyte |
+| Default-klass (efter order) | Vilken klass som återställs till efter order |
+| Återställ efter order | Om klassen ska återställas efter genomförd order |
+| Privacy mode | Döljer ekonomiska värden på sidan |
+| Dölj loggor | Tar bort bolagsloggor från börsskärmen |
