@@ -374,9 +374,9 @@
       btn.style.cssText = `
         padding: 8px 16px;
         border-radius: 20px;
-        border: 2px solid ${isCurrent ? '#068e6a' : '#ccc'};
+        border: 2px solid #068e6a;
         background: ${isCurrent ? '#068e6a' : '#fff'};
-        color: ${isCurrent ? '#fff' : '#333'};
+        color: ${isCurrent ? '#fff' : '#068e6a'};
         cursor: pointer;
         font-weight: ${isCurrent ? '600' : '400'};
         font-size: 13px;
