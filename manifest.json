@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "StockTools",
-  "version": "2.0",
+  "version": "2.1",
+  "update_url": "https://tickr.se/extension/update.xml",
   "description": "Courtage optimizer, privacy mode och rena upp ditt mäklargränssnitt.",
   "permissions": ["activeTab", "scripting", "storage", "notifications"],
   "host_permissions": ["https://www.avanza.se/*", "https://tickr.se/*"],
