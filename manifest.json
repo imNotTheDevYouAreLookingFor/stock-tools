@@ -3,8 +3,8 @@
   "name": "StockTools",
   "version": "2.0",
   "description": "Courtage optimizer, privacy mode och rena upp ditt mäklargränssnitt.",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://www.avanza.se/*"],
+  "permissions": ["activeTab", "scripting", "storage", "notifications"],
+  "host_permissions": ["https://www.avanza.se/*", "https://tickr.se/*"],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

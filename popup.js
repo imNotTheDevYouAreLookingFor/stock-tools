@@ -9,6 +9,7 @@
     resetAfterOrder: true,
     privacyMode: false,
     hideLogos: false,
+    tickrNotifications: true,
   };
 
   async function getSettings() {
@@ -144,6 +145,16 @@
       const currentSettings = await getSettings();
       const newSettings = { ...currentSettings, hideLogos: e.target.checked };
       await saveSettings(newSettings);
+      showStatus();
+    });
+
+    // Tickr notifications toggle
+    document.getElementById('tickrNotifications').checked = settings.tickrNotifications !== false;
+    document.getElementById('tickrNotifications').addEventListener('change', async (e) => {
+      const currentSettings = await getSettings();
+      const newSettings = { ...currentSettings, tickrNotifications: e.target.checked };
+      await saveSettings(newSettings);
+      chrome.runtime.sendMessage({ type: 'TICKR_NOTIFICATIONS_CHANGED', enabled: e.target.checked });
       showStatus();
     });
   }
