@@ -1,0 +1,36 @@
+name: Deploy extension ZIP to tickr.se
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create ZIP
+        run: |
+          zip -r tickrtools.zip . \
+            --exclude "*.git*" \
+            --exclude ".github/*" \
+            --exclude "*.md" \
+            --exclude "*.pem"
+
+      - name: Checkout mfn-tldr
+        uses: actions/checkout@v4
+        with:
+          repository: imNotTheDevYouAreLookingFor/tldr
+          token: ${{ secrets.TLDR_DEPLOY_TOKEN }}
+          path: tldr
+
+      - name: Copy ZIP and commit
+        run: |
+          cp tickrtools.zip tldr/public/extension/tickrtools.zip
+          cd tldr
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/extension/tickrtools.zip
+          git commit -m "Update Tickr Tools extension ZIP" || echo "No changes"
+          git push
