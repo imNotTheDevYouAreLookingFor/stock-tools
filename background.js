@@ -3,7 +3,7 @@ const VAPID_PUBLIC_KEY = 'BB1NVVo0EzglS1fZVEC-YpcI2vGao_iWol28WdMKXcjOM2y62Ceiav
 const STORAGE_KEY = 'avanzaOptimizerSettings';
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[StockTools] Installed');
+  console.log('[Tickr Tools] Installed');
   await maybeRegisterPush();
 });
 
@@ -24,7 +24,7 @@ async function maybeRegisterPush() {
 
     await registerWithTickr(subscription.toJSON());
   } catch (err) {
-    console.warn('[StockTools] Push registration failed:', err);
+    console.warn('[Tickr Tools] Push registration failed:', err);
   }
 }
 
@@ -49,7 +49,7 @@ async function unregisterFromTickr() {
 
     await subscription.unsubscribe();
   } catch (err) {
-    console.warn('[StockTools] Push unregister failed:', err);
+    console.warn('[Tickr Tools] Push unregister failed:', err);
   }
 }
 
@@ -68,7 +68,7 @@ self.addEventListener('push', (event) => {
       })
     );
   } catch (err) {
-    console.warn('[StockTools] Push parse error:', err);
+    console.warn('[Tickr Tools] Push parse error:', err);
   }
 });
 
